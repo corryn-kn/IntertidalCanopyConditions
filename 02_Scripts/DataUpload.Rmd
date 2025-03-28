@@ -4,3 +4,66 @@ author: "Author"
 date: "2025-03-28"
 output: html_document
 ---
+
+
+### Introduction
+This Rmarkdown reads in and cleans data collected on Kestrel D2 drop humidity loggers collected in Summer 2020 on 10 separate days. Each day had 7 loggers deployed, with a varying number of treatments and replicates based on the evolving nature of the experimental question. 
+
+## Install Libraries
+```{r}
+library(dplyr)
+library(lubridate)
+library(tidyverse)
+library(readr)
+```
+
+## Functions to Read Data
+
+```{r}
+## Editing Kestrel Function data script to wrangle uploaded data
+edit_Kestrel <- function(dfK_raw, filename){
+  serial_number <- as.character(dfK_raw[2, 2]) 
+  # Skip the first 4 rows
+  dfK <- dfK_raw[-c(1:4), ]  
+  
+  treatment <- str_extract(basename(filename), "(?<=-)[^\\.]+") 
+  
+  colnames(dfK) <- c("DateTime","Temp","RH","Heat_Stress","Dew_Point")
+  dfK <- dplyr::select(dfK, DateTime, Temp, RH) 
+  dfK$Temp= as.double(dfK$Temp)
+  dfK$RH = as.double(dfK$RH)
+  dfK$DateTime <- mdy_hm(dfK$DateTime)
+  #dfK$DateTime <- parse_date_time(dfK$DateTime, orders = c("bdy_HMSp")) #gives the date format
+  dfK <- mutate(dfK, Time = strftime(dfK$DateTime, format = "%H:%M:%S %p", tz = "UTC")) #separates time as character 
+  dfK <- relocate(dfK, Time, .before = Temp) #places column before temp
+  dfK$Time <- substr(dfK$Time, 1, 5) #removes seconds from Time
+  dfK <- mutate(dfK, Date = as.Date(dfK$DateTime)) #adds an additional date column
+  dfK <- relocate(dfK, Date, .before =Time) #places col before time
+  dfK <- mutate(dfK, SerialNumber = serial_number)
+  dfK <- mutate(dfK, Treatment = treatment)
+  glimpse(dfK)
+  print(dfK)
+  return(dfK)
+}
+```
+
+### Read In Data
+```{r}
+# Define the folder path
+folder_path <- "../01_RawData"
+
+file_list <- list.files(path = folder_path, pattern = "*.csv", full.names = TRUE)
+
+process_file <- function(file) {
+  df <- read_csv(file)  # Read raw file
+  df <- edit_Kestrel(df, file)  # Pass both dataframe and filename
+  return(df)
+}
+
+combined_df <- bind_rows(lapply(file_list, process_file))
+
+glimpse(combined_df)
+```
+
+
+

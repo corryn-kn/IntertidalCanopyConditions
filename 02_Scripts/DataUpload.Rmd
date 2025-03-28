@@ -22,27 +22,36 @@ library(readr)
 ```{r}
 ## Editing Kestrel Function data script to wrangle uploaded data
 edit_Kestrel <- function(dfK_raw, filename){
+  
+  # Pull serial number which is saved in row 2 column 2
   serial_number <- as.character(dfK_raw[2, 2]) 
+  
   # Skip the first 4 rows
   dfK <- dfK_raw[-c(1:4), ]  
   
+  # Save treatment which was manually included in the file name as "-treatment.csv"
   treatment <- str_extract(basename(filename), "(?<=-)[^\\.]+") 
   
+  # Change column names
   colnames(dfK) <- c("DateTime","Temp","RH","Heat_Stress","Dew_Point")
+  
+  # Subset relevant columns
   dfK <- dplyr::select(dfK, DateTime, Temp, RH) 
+  
+  # Correct data type
   dfK$Temp= as.double(dfK$Temp)
   dfK$RH = as.double(dfK$RH)
   dfK$DateTime <- mdy_hm(dfK$DateTime)
-  #dfK$DateTime <- parse_date_time(dfK$DateTime, orders = c("bdy_HMSp")) #gives the date format
-  dfK <- mutate(dfK, Time = strftime(dfK$DateTime, format = "%H:%M:%S %p", tz = "UTC")) #separates time as character 
-  dfK <- relocate(dfK, Time, .before = Temp) #places column before temp
+
+  # Create new columns
+  dfK <- mutate(dfK, Time = strftime(dfK$DateTime, format = "%H:%M:%S %p", tz = "UTC"), .before = Temp) #separates time as character 
   dfK$Time <- substr(dfK$Time, 1, 5) #removes seconds from Time
-  dfK <- mutate(dfK, Date = as.Date(dfK$DateTime)) #adds an additional date column
-  dfK <- relocate(dfK, Date, .before =Time) #places col before time
-  dfK <- mutate(dfK, SerialNumber = serial_number)
-  dfK <- mutate(dfK, Treatment = treatment)
-  glimpse(dfK)
-  print(dfK)
+  
+  dfK <- mutate(dfK, Date = as.Date(dfK$DateTime), .before = Time) #adds date column
+
+  dfK <- mutate(dfK, SerialNumber = serial_number) #adds serial number 
+  dfK <- mutate(dfK, Treatment = treatment) #adds treatment
+
   return(dfK)
 }
 ```
@@ -55,7 +64,7 @@ folder_path <- "../01_RawData"
 file_list <- list.files(path = folder_path, pattern = "*.csv", full.names = TRUE)
 
 process_file <- function(file) {
-  df <- read_csv(file)  # Read raw file
+  df <- read_csv(file, show_col_types = FALSE)  # Read raw file
   df <- edit_Kestrel(df, file)  # Pass both dataframe and filename
   return(df)
 }
@@ -64,6 +73,6 @@ combined_df <- bind_rows(lapply(file_list, process_file))
 
 glimpse(combined_df)
 ```
-
+### Now for every day, it looks like I cut out some amount of time, I need to investigate if they are the same and document why and then I'm thinking I save in a separate csv and then call on that to the cut the times in the combined.df
 
 

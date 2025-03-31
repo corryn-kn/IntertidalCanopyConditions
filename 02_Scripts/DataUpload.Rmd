@@ -6,7 +6,7 @@ output: html_document
 ---
 
 
-### Introduction
+# Introduction
 This Rmarkdown reads in and cleans data collected on Kestrel D2 drop humidity loggers collected in Summer 2020 on 10 separate days. Each day had 7 loggers deployed, with a varying number of treatments and replicates based on the evolving nature of the experimental question. 
 
 ## Install Libraries
@@ -26,8 +26,11 @@ edit_Kestrel <- function(dfK_raw, filename){
   # Pull serial number which is saved in row 2 column 2
   serial_number <- as.character(dfK_raw[2, 2]) 
   
-  # Skip the first 4 rows
+  # Skip the first 4 rows to get to first time point
   dfK <- dfK_raw[-c(1:4), ]  
+  
+  # Skip the next 3 rows to account for logger calibration (30 minutes, each observation is 10 minutes apart)
+  dfK <- dfK[-c(1:3), ]  
   
   # Save treatment which was manually included in the file name as "-treatment.csv"
   treatment <- str_extract(basename(filename), "(?<=-)[^\\.]+") 
@@ -56,7 +59,7 @@ edit_Kestrel <- function(dfK_raw, filename){
 }
 ```
 
-### Read In Data
+# Read In Data
 ```{r}
 # Define the folder path
 folder_path <- "../01_RawData"
@@ -73,6 +76,38 @@ combined_df <- bind_rows(lapply(file_list, process_file))
 
 glimpse(combined_df)
 ```
-### Now for every day, it looks like I cut out some amount of time, I need to investigate if they are the same and document why and then I'm thinking I save in a separate csv and then call on that to the cut the times in the combined.df
+# Editing Data
+
+## Removing erroneous reads
+From notes, on May 27th removed the last three data points because of a splash and on June 25 removed the last data point because of a splash.
+```{r}
+filtered_df <- combined_df %>%
+  filter(!(Date == "2020-05-27" & Time %in% c("13:50", "14:00", "14:10")) &
+         !(Date == "2020-06-25" & Time == "13:00"))
+
+str(combined_df)
+
+```
+## Add Replicate Number
+dense_rank assigns a rank, and we can specificy it to assign a unique rank based on the serial number within a certain group. So by grouping Date and Treatment, within each Date, and Treatment, a serial number will be ranked so any repeated Date and Treatments would then get a consecutive rank (ie 2, 3, etc). 
+```{r}
+filtered_df <- filtered_df %>%
+  group_by(Date, Treatment) %>%
+  mutate(Replicate = dense_rank(SerialNumber)) %>%
+  ungroup()
+```
+
+
+
+## Subset Desired Treatments
+```{r}
+selected_treatments_df <- filtered_df %>%
+  filter(Treatment %in% c("fucus", "masto", "control"))
+```
+
+
+# Data Visualization
+
+## Line Graphs
 
 

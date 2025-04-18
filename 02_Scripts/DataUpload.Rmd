@@ -74,40 +74,90 @@ process_file <- function(file) {
 
 combined_df <- bind_rows(lapply(file_list, process_file))
 
+combined_df$Treatment[combined_df$Treatment == "Fucus"] <- "fucus"
+
 glimpse(combined_df)
 ```
 # Editing Data
 
+I have a question about the first day, I can't use the relative humidity data from Fucus logger, but I can use temperature. But the real question I have is should I just not use that date in general? It does show temperature differences which is helpful but I guess I'm wondering if the data can stand without it. Technically I can include it, temp and RH aren't the same thing for the logger so it's still accurate data, but just a pain in the butt. 
+
 ## Removing erroneous reads
-From notes, on May 27th removed the last three data points because of a splash and on June 25 removed the last data point because of a splash.
+From notes, on May 27th removed the last three data points because of a splash and on June 25 removed the last data point because of a splash. On June 26, remove last three points (30 min) because relative humidity got messed up - could concievably keep temperature.
 ```{r}
 filtered_df <- combined_df %>%
   filter(!(Date == "2020-05-27" & Time %in% c("13:50", "14:00", "14:10")) &
-         !(Date == "2020-06-25" & Time == "13:00"))
+         !(Date == "2020-06-25" & Time == "13:00") &
+           !(Date == "2020-06-26" & Time %in% c("13:40", "13:50", "14:00", "14:00")))
+           
 
 str(combined_df)
 
 ```
-## Add Replicate Number
+## Add Replicate Number and Duration
 dense_rank assigns a rank, and we can specificy it to assign a unique rank based on the serial number within a certain group. So by grouping Date and Treatment, within each Date, and Treatment, a serial number will be ranked so any repeated Date and Treatments would then get a consecutive rank (ie 2, 3, etc). 
 ```{r}
 filtered_df <- filtered_df %>%
   group_by(Date, Treatment) %>%
   mutate(Replicate = dense_rank(SerialNumber)) %>%
   ungroup()
+
+
+duration_filtered_df <- filtered_df %>%
+  group_by(Treatment, Replicate, Date) %>%
+  mutate(Duration_mins = as.numeric(difftime(DateTime, min(DateTime), units = "mins"))) %>%
+  ungroup()
+
+
+
 ```
 
 
 
 ## Subset Desired Treatments
 ```{r}
-selected_treatments_df <- filtered_df %>%
+selected_treatments_df <- duration_filtered_df %>%
   filter(Treatment %in% c("fucus", "masto", "control"))
+
+unique_combos <- selected_treatments_df %>%
+  distinct(Date, Treatment, Replicate) %>%
+  arrange(Date, Treatment, Replicate)
+
+fucusonly_df <- selected_treatments_df %>%
+  filter(Treatment %in% c("fucus","control"))
+
+
 ```
 
 
 # Data Visualization
 
 ## Line Graphs
+```{r}
+ggplot(data = fucusonly_df) + 
+  aes(x = Duration_mins, y= Temp, color = interaction(Treatment, Replicate), shape = Treatment)+
+  geom_point() +
+    geom_path(aes(group = interaction(Treatment, Replicate))) +
+    theme_bw() + 
+    labs(y = "Temperature (°C) ", x = "Duration (min)") + 
+  facet_wrap(~Date)
+```
+## Box plots
+```{r}
+ggplot(data = selected_treatments_df) +
+  aes(y = Temp, x = Treatment, color = Treatment)+
+  geom_boxplot()+
+  theme_bw()
+  
 
+selected_treatments_df$Date <- factor(selected_treatments_df$Date)
+ggplot(data = selected_treatments_df) +
+  aes(y = Temp, x = Date, color = Treatment, group = interaction(Date, Treatment))+
+  geom_boxplot()+
+  theme_bw()
+
+
+
+
+```
 
